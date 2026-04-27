@@ -209,9 +209,20 @@ class _AllSportsScreenState extends State<AllSportsScreen> {
                     padding: const EdgeInsets.all(32.0),
                     child: Text('No sports found', style: TextStyle(color: _onSurfaceVariant, fontFamily: 'Manrope')),
                   ))
-                : Wrap(
-                    spacing: 16, runSpacing: 24, alignment: WrapAlignment.start,
-                    children: _filteredSports.map((s) => _buildSportItem(s)).toList(),
+                : GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      mainAxisSpacing: 24,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 0.85,
+                    ),
+                    itemCount: _filteredSports.length,
+                    itemBuilder: (context, index) => Align(
+                      alignment: Alignment.topCenter,
+                      child: _buildSportItem(_filteredSports[index]),
+                    ),
                   ),
             const SizedBox(height: 40),
 
@@ -327,7 +338,7 @@ class _AllSportsScreenState extends State<AllSportsScreen> {
     ],
   ),
   floatingActionButton: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 80),
         child: FloatingActionButton(
           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateEventScreen())),
           backgroundColor: _primaryColor,

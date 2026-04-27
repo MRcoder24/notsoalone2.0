@@ -684,8 +684,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       Expanded(child: _buildTextField('Age', _ageController, keyboard: TextInputType.number, suffix: 'yrs')),
                       const SizedBox(width: 16),
                       Expanded(child: _buildTextField('Height', _heightController, keyboard: TextInputType.number, suffix: 'cm')),
-                      const SizedBox(width: 16),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
                       Expanded(child: _buildTextField('Weight', _weightController, keyboard: TextInputType.number, suffix: 'kg')),
+                      const SizedBox(width: 16),
+                      Expanded(child: const SizedBox.shrink()),
                     ],
                   ),
                   const SizedBox(height: 16),

@@ -190,7 +190,7 @@ class _HomeScreenState extends State<HomeScreen>
         ),
         floatingActionButton: _showFab
             ? Container(
-                margin: const EdgeInsets.only(bottom: 16),
+                margin: const EdgeInsets.only(bottom: 80),
                 child: FloatingActionButton(
                   onPressed: () {
                     Navigator.push(
@@ -1180,6 +1180,22 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  ImageProvider _getAvatarProvider(String? url) {
+    if (url != null && url.isNotEmpty) {
+      if (url.startsWith('data:image')) {
+        try {
+          final base64String = url.split(',').last;
+          return MemoryImage(base64Decode(base64String));
+        } catch (e) {
+          debugPrint('Error decoding base64 image: $e');
+        }
+      } else {
+        return NetworkImage(url);
+      }
+    }
+    return const NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuAU_g7AZTKk4C0YUpsYbU0e2jhfQN7SWIWh1L2Ofa2YMvnNsTQiMlq0uPUNdFYc59UZhmWXFHtcIkB_5fE5Hfw8MUUZsUkWKhjFFlZs6HQHJCrf1aCxeG8o0IFIcN7UlVmnp99LETsACPSxumAhh9pC_h6w7krNFuYrB_-URamZkglH-ucsDQdsrnPkfJ82MDXa2YoMAfe13kK9mA2vYcqbUsFVFavBr2j3ALPZqCiwo3qJwp3_zLA2oMVywW0YOC1JTuCBwU9CmrU');
+  }
+
   Widget _buildGreeting() {
     final displayName = _userName.isNotEmpty ? _userName : 'Champ';
     return Row(
@@ -1197,9 +1213,7 @@ class _HomeScreenState extends State<HomeScreen>
                       shape: BoxShape.circle,
                       border: Border.all(color: _primaryColor, width: 2),
                       image: DecorationImage(
-                        image: _userAvatarUrl != null && _userAvatarUrl!.isNotEmpty
-                            ? NetworkImage(_userAvatarUrl!)
-                            : const NetworkImage('https://lh3.googleusercontent.com/aida-public/AB6AXuAU_g7AZTKk4C0YUpsYbU0e2jhfQN7SWIWh1L2Ofa2YMvnNsTQiMlq0uPUNdFYc59UZhmWXFHtcIkB_5fE5Hfw8MUUZsUkWKhjFFlZs6HQHJCrf1aCxeG8o0IFIcN7UlVmnp99LETsACPSxumAhh9pC_h6w7krNFuYrB_-URamZkglH-ucsDQdsrnPkfJ82MDXa2YoMAfe13kK9mA2vYcqbUsFVFavBr2j3ALPZqCiwo3qJwp3_zLA2oMVywW0YOC1JTuCBwU9CmrU') as ImageProvider,
+                        image: _getAvatarProvider(_userAvatarUrl),
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -1229,7 +1243,7 @@ class _HomeScreenState extends State<HomeScreen>
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: _textColor,
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
