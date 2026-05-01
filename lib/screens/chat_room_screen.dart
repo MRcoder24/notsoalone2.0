@@ -195,6 +195,285 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  Future<Map<String, dynamic>> _fetchGroupInfo() async {
+    // Avoid selecting created_by from group_chats -- it has a FK to
+    // auth.users (cross-schema) which causes PGRST200 errors.
+
+    Map<String, dynamic> group;
+    try {
+      group = await Supabase.instance.client
+          .from('group_chats')
+          .select('id, name, sport, description, created_at')
+          .eq('id', widget.matchId)
+          .single();
+    } catch (e) {
+      debugPrint('Error fetching group: $e');
+      group = {
+        'id': widget.matchId,
+        'name': widget.matchTitle,
+        'sport': '',
+        'description': '',
+        'created_at': '',
+      };
+    }
+
+    // Fetch members without joining profiles to avoid PGRST200 on cross-schema FK
+    List<dynamic> members = [];
+    try {
+      final rawMembers = await Supabase.instance.client
+          .from('group_members')
+          .select('user_id')
+          .eq('group_id', widget.matchId);
+          
+      // Fetch profiles manually
+      if (rawMembers.isNotEmpty) {
+        final userIds = rawMembers.map((m) => m['user_id']).toList();
+        final profiles = await Supabase.instance.client
+            .from('profiles')
+            .select('id, username, avatar_url')
+            .inFilter('id', userIds.cast<Object>());
+            
+        // Construct the expected structure: { 'user_id': id, 'profiles': { 'username': ..., 'avatar_url': ... } }
+        for (var member in rawMembers) {
+          final profile = profiles.firstWhere(
+            (p) => p['id'] == member['user_id'], 
+            orElse: () => <String, dynamic>{}
+          );
+          members.add({
+            'user_id': member['user_id'],
+            'profiles': profile.isNotEmpty ? profile : null,
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching members: $e');
+    }
+
+    // The first member added is typically the creator
+    String? createdByUserId;
+    if (members.isNotEmpty) {
+      createdByUserId = members[0]['user_id']?.toString();
+    }
+    group['created_by'] = createdByUserId;
+
+    // Fetch creator display name
+    String creatorName = 'Unknown';
+    if (createdByUserId != null && createdByUserId.isNotEmpty) {
+      try {
+        final creatorProfile = await Supabase.instance.client
+            .from('profiles')
+            .select('username')
+            .eq('id', createdByUserId)
+            .maybeSingle();
+        if (creatorProfile != null) {
+          creatorName = creatorProfile['username']?.toString() ?? 'Unknown';
+        }
+      } catch (_) {}
+    }
+
+    return {
+      'group': group,
+      'members': members,
+      'creatorName': creatorName,
+    };
+  }
+
+
+  Future<void> _showGroupInfo() async {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: AppTheme.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: FutureBuilder(
+            future: _fetchGroupInfo(),
+            builder: (context, AsyncSnapshot<Map<String, dynamic>> snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(fontFamily: 'Manrope')));
+              }
+
+              final groupData = snapshot.data!['group'];
+              final membersData = snapshot.data!['members'] as List<dynamic>;
+              final creatorName = snapshot.data!['creatorName'] as String;
+
+              return Column(
+                children: [
+                  // Handle
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 12),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppTheme.outline.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.primaryGradient,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Center(
+                            child: Text(
+                              widget.matchTitle.isNotEmpty ? widget.matchTitle[0].toUpperCase() : 'G',
+                              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, fontFamily: 'Lexend'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.matchTitle,
+                                style: const TextStyle(fontFamily: 'Lexend', fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textMain),
+                              ),
+                              Text(
+                                groupData['sport'] ?? 'Sport Group',
+                                style: TextStyle(fontFamily: 'Manrope', fontSize: 14, color: AppTheme.primary.withOpacity(0.8), fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  if (groupData['description'] != null && groupData['description'].toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surface,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Description', style: TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textVariant)),
+                            const SizedBox(height: 4),
+                            Text(groupData['description'], style: const TextStyle(fontFamily: 'Manrope', fontSize: 14, color: AppTheme.textMain)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.stars, color: Colors.amber, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Created by ',
+                          style: TextStyle(fontFamily: 'Manrope', fontSize: 14, color: AppTheme.textVariant),
+                        ),
+                        Text(
+                          creatorName,
+                          style: const TextStyle(fontFamily: 'Manrope', fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textMain),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Members', style: TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.bold, fontSize: 18, color: AppTheme.textMain)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${membersData.length} total',
+                            style: TextStyle(fontFamily: 'Manrope', fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      itemCount: membersData.length,
+                      itemBuilder: (context, index) {
+                        final member = membersData[index]['profiles'];
+                        final name = member?['username'] ?? 'Athlete';
+                        final avatar = member?['avatar_url'];
+                        final bool isCreator = membersData[index]['user_id'] == groupData['created_by'];
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor: AppTheme.surfaceContainer,
+                                backgroundImage: avatar != null ? NetworkImage(avatar) : null,
+                                child: avatar == null ? Text(name[0].toUpperCase(), style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold)) : null,
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: const TextStyle(fontFamily: 'Manrope', fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textMain),
+                                ),
+                              ),
+                              if (isCreator)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.amber.shade700, width: 1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Admin',
+                                    style: TextStyle(color: Colors.amber.shade900, fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Lexend'),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
@@ -247,30 +526,34 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          widget.matchTitle,
-                          style: const TextStyle(
-                            fontFamily: 'Lexend',
-                            fontWeight: FontWeight.bold,
-                            fontSize: 17,
-                            color: AppTheme.textMain,
+                    child: GestureDetector(
+                      onTap: _showGroupInfo,
+                      behavior: HitTestBehavior.opaque,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            widget.matchTitle,
+                            style: const TextStyle(
+                              fontFamily: 'Lexend',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 17,
+                              color: AppTheme.textMain,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'tap here for group info',
-                          style: TextStyle(
-                            fontFamily: 'Manrope',
-                            fontSize: 12,
-                            color: AppTheme.textVariant.withOpacity(0.7),
+                          const SizedBox(height: 2),
+                          Text(
+                            'tap here for group info',
+                            style: TextStyle(
+                              fontFamily: 'Manrope',
+                              fontSize: 12,
+                              color: AppTheme.textVariant.withOpacity(0.7),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   IconButton(

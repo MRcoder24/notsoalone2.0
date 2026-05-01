@@ -68,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen>
     LocationService.syncCurrentLocation();
     NotificationService.init();
     NotificationService.startListening();
+    NotificationService.startGroupChatListener();
     _fetchNearbyAthletes();
     _fetchJoinedMatches();
     _loadUserProfile();

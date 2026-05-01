@@ -137,7 +137,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         'sport': _selectedSport,
         'description': _descriptionController.text.trim(),
         'created_by': user.id,
-      }).select().single();
+      }).select('id, name').single();
 
       final groupId = response['id']?.toString() ?? '';
 

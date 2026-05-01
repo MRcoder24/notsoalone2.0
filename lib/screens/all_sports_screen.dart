@@ -155,11 +155,9 @@ class _AllSportsScreenState extends State<AllSportsScreen> {
         appBar: AppBar(
           backgroundColor: _bgColor.withOpacity(0.7),
           elevation: 0,
-          leading: IconButton(icon: Icon(Icons.menu, color: _onSurface), onPressed: () {}),
+          automaticallyImplyLeading: false,
           title: Text('Explore', style: TextStyle(color: _onSurface, fontFamily: 'Lexend', fontWeight: FontWeight.bold, fontSize: 20)),
-          actions: [
-            IconButton(icon: Icon(Icons.notifications_none, color: _onSurface), onPressed: () {}),
-          ],
+          centerTitle: true,
           bottom: TabBar(
             indicatorColor: _primaryColor,
             labelColor: _primaryColor,
@@ -294,7 +292,15 @@ class _AllSportsScreenState extends State<AllSportsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Upcoming Events in $_selectedSport', style: TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.bold, fontSize: 18, color: _onSurface)),
+                Expanded(
+                  child: Text(
+                    'Upcoming Events in $_selectedSport',
+                    style: TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.bold, fontSize: 18, color: _onSurface),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+                const SizedBox(width: 4),
                 TextButton(
                   onPressed: () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateEventScreen()));

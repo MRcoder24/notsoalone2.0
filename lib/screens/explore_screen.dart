@@ -478,7 +478,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
       return Center(child: CircularProgressIndicator(color: _primaryColor));
     }
     if (errorMessage != null) {
-      return Center(
+      return SingleChildScrollView(
+        controller: scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -504,7 +506,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
       );
     }
     if (users.isEmpty) {
-      return Center(
+      return SingleChildScrollView(
+        controller: scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
