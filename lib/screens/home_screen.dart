@@ -45,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen>
   String _userName = '';
   String? _userAvatarUrl;
   String _userLocation = 'Loading...';
+  double? _compositeScore;
 
   // Radar state
   List<dynamic> _nearbyUsers = [];
@@ -246,16 +247,58 @@ class _HomeScreenState extends State<HomeScreen>
                   );
                 }
                 if (snapshot.hasError) {
+                  final errStr = snapshot.error.toString();
+                  final isOffline = errStr.contains('SocketException') || errStr.contains('Failed host lookup');
                   return SliverFillRemaining(
                     child: Center(
-                      child: Text(
-                        'Error: ${snapshot.error}',
-                        style: const TextStyle(color: Colors.red),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(isOffline ? Icons.wifi_off : Icons.error_outline, size: 48, color: Colors.red[300]),
+                          const SizedBox(height: 16),
+                          Text(
+                            isOffline ? 'No Internet Connection' : 'Could not load matches',
+                            style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                     ),
                   );
                 }
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                var matches = snapshot.data!;
+                final now = DateTime.now();
+                
+                // Filter out events that ended more than 7 days ago
+                matches = matches.where((match) {
+                  DateTime? eventDate;
+                  DateTime? endTime;
+                  
+                  try {
+                    if (match['event_date'] != null) {
+                      eventDate = DateTime.parse(match['event_date'].toString());
+                    }
+                    
+                    final rawDesc = match['description'];
+                    if (rawDesc != null && rawDesc.toString().isNotEmpty) {
+                      final desc = jsonDecode(rawDesc.toString()) as Map<String, dynamic>;
+                      if (desc['end_time'] != null) {
+                        endTime = DateTime.parse(desc['end_time'].toString());
+                      }
+                    }
+                  } catch (_) {}
+                  
+                  if (eventDate != null) {
+                    final actualEndTime = endTime ?? eventDate.add(const Duration(hours: 2));
+                    // If it ended more than 7 days ago, hide it
+                    if (now.difference(actualEndTime).inDays > 7) {
+                      return false;
+                    }
+                  }
+                  
+                  return true;
+                }).toList();
+                
+                if (matches.isEmpty) {
                   return const SliverFillRemaining(
                     child: Center(
                       child: Text(
@@ -264,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   );
                 }
-                final matches = snapshot.data!;
+                
                 return SliverPadding(
                   padding: const EdgeInsets.only(bottom: 120),
                   sliver: SliverList(
@@ -833,7 +876,9 @@ class _HomeScreenState extends State<HomeScreen>
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.red),
             SizedBox(width: 10),
-            Text('EMERGENCY SOS', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w900)),
+            Expanded(
+              child: Text('EMERGENCY SOS', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w900)),
+            ),
           ],
         ),
         content: Column(
@@ -1035,6 +1080,7 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() {
           _userName = (data['full_name'] ?? data['username'] ?? '').toString();
           _userAvatarUrl = data.containsKey('avatar_url') ? data['avatar_url'] : null;
+          _compositeScore = data.containsKey('composite_score') ? (data['composite_score'] as num?)?.toDouble() : null;
           _rawProfileData = data;
         });
       }
@@ -1239,14 +1285,41 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Hey $displayName!',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _textColor,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Hey $displayName!',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _textColor,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (_compositeScore != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.star_rounded, color: Colors.amber.shade700, size: 14),
+                                const SizedBox(width: 2),
+                                Text(
+                                  _compositeScore!.toStringAsFixed(1),
+                                  style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Manrope'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Row(

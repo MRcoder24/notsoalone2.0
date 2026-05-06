@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "712653502070",
+    "project_id": "notsoalone-13109",
+    "storage_bucket": "notsoalone-13109.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:712653502070:android:671c16d1751783f8b5d157",
+        "android_client_info": {
+          "package_name": "com.example.notsoalone2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbGm-5B4xuwD7xM-FUBUxFOiV4IbWLDQQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

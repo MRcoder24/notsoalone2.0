@@ -41,6 +41,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // ── State ────────────────────────────────────────────────
   bool _aadhaarVerified = false;
   bool _isSaving = false;
+  double? _compositeScore;
 
   // Images (bytes for web compatibility)
   Uint8List? _bannerBytes;
@@ -107,6 +108,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _aadhaarVerified = data.containsKey('aadhaar_verified') ? (data['aadhaar_verified'] ?? false) : false;
           _avatarUrl = data.containsKey('avatar_url') ? data['avatar_url'] : null;
           _bannerUrl = data.containsKey('banner_url') ? data['banner_url'] : null;
+          _compositeScore = data.containsKey('composite_score') ? (data['composite_score'] as num?)?.toDouble() : null;
           
           if (data.containsKey('medical_data') && data['medical_data'] != null) {
             final medical = data['medical_data'] as Map<String, dynamic>;
@@ -394,8 +396,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       debugPrint('Save error: $e');
       if (!mounted) return;
+      
+      String errorMessage = 'Error saving profile: $e';
+      if (e.toString().contains('SocketException') || e.toString().contains('Failed host lookup')) {
+        errorMessage = 'Please check your internet connection.';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving profile: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -675,7 +683,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSectionTitle('Personal Details'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildSectionTitle('Personal Details'),
+                      if (_compositeScore != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star_rounded, color: Colors.amber.shade700, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                _compositeScore!.toStringAsFixed(1),
+                                style: TextStyle(color: Colors.amber.shade900, fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'Lexend'),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
                   const SizedBox(height: 24),
                   _buildTextField('Full Name', _nameController, icon: Icons.person_outline),
                   const SizedBox(height: 16),

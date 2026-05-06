@@ -1,17 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/location_detail_screen.dart';
 import 'theme/app_theme.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  print('Handling a background message: ${message.messageId}');
+}
 
 Future<void> main() async {
   print('Starting app initialization...');
   WidgetsFlutterBinding.ensureInitialized();
   print('Widgets initialized...');
 
-  runApp(const MyApp());
-  print('runApp called!');
+  print('Initializing Firebase...');
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    print('Firebase initialized!');
+  } catch (e) {
+    print('Firebase init failed: $e');
+  }
 
   print('Initializing Supabase...');
   try {
@@ -24,6 +41,9 @@ Future<void> main() async {
   } catch (e) {
     print('Supabase init failed: $e');
   }
+
+  runApp(const MyApp());
+  print('runApp called!');
 }
 
 class MyApp extends StatelessWidget {

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
+import 'peer_review_screen.dart';
 
 class ChatRoomScreen extends StatefulWidget {
   final String matchId;
@@ -560,9 +561,36 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     icon: const Icon(Icons.videocam_rounded, color: AppTheme.primary),
                     onPressed: () {},
                   ),
-                  IconButton(
+                  PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert, color: AppTheme.textMain),
-                    onPressed: () {},
+                    onSelected: (value) {
+                      if (value == 'review') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PeerReviewScreen(
+                              matchId: null,
+                              revieweeId: widget.matchId,
+                              revieweeName: widget.matchTitle,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    itemBuilder: (BuildContext context) {
+                      return [
+                        const PopupMenuItem<String>(
+                          value: 'review',
+                          child: Row(
+                            children: [
+                              Icon(Icons.star_rate_rounded, color: Colors.amber, size: 20),
+                              SizedBox(width: 8),
+                              Text('Review Player', style: TextStyle(fontFamily: 'Manrope')),
+                            ],
+                          ),
+                        ),
+                      ];
+                    },
                   ),
                 ],
               ),
@@ -591,17 +619,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
                     if (snapshot.hasError) {
                       debugPrint('Chat error: ${snapshot.error}');
+                      final errStr = snapshot.error.toString();
+                      final isOffline = errStr.contains('SocketException') || errStr.contains('Failed host lookup');
                       return Center(
                         child: Padding(
                           padding: const EdgeInsets.all(32),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+                              Icon(isOffline ? Icons.wifi_off : Icons.error_outline, size: 48, color: Colors.red.shade300),
                               const SizedBox(height: 16),
-                              const Text(
-                                'Could not load messages',
-                                style: TextStyle(
+                              Text(
+                                isOffline ? 'No Internet Connection' : 'Could not load messages',
+                                style: const TextStyle(
                                   fontFamily: 'Lexend',
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -610,7 +640,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                '${snapshot.error}',
+                                isOffline ? 'Please check your connection and try again.' : '$errStr',
                                 style: const TextStyle(
                                   fontFamily: 'Manrope',
                                   fontSize: 12,

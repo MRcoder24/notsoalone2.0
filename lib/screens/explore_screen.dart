@@ -9,6 +9,7 @@ import 'edit_profile_screen.dart';
 import 'chat_room_screen.dart';
 import 'package:geolocator/geolocator.dart';
 import '../theme/app_theme.dart';
+import '../services/matchmaking_service.dart';
 
 class ExploreScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -61,8 +62,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
       errorMessage = null;
     });
 
+    Map<String, dynamic> currentUserData = {};
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+         final userData = await Supabase.instance.client.from('profiles').select('skill_level, stamina_level').eq('id', user.id).maybeSingle();
+         if (userData != null) {
+            currentUserData = userData;
+         }
+      }
+    } catch (e) {
+      debugPrint('Explore: error fetching current user profile $e');
+    }
+
     if (kIsWeb) {
-      await _fetchAllAthletes();
+      await _fetchAllAthletes(currentUserData);
       return;
     }
 
@@ -72,13 +86,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
         final lat = geolocator['lat'] as double;
         final lng = geolocator['lng'] as double;
         _mapCenter = LatLng(lat, lng);
-        await _fetchNearbyViaRpc(lat, lng);
+        currentUserData['latitude'] = lat;
+        currentUserData['longitude'] = lng;
+        await _fetchNearbyViaRpc(lat, lng, currentUserData);
       } else {
-        await _fetchAllAthletes();
+        await _fetchAllAthletes(currentUserData);
       }
     } catch (e) {
       debugPrint('Explore: location error $e');
-      await _fetchAllAthletes();
+      await _fetchAllAthletes(currentUserData);
     }
   }
 
@@ -103,41 +119,81 @@ class _ExploreScreenState extends State<ExploreScreen> {
     }
   }
 
-  Future<void> _fetchNearbyViaRpc(double lat, double lng) async {
+  Future<void> _fetchNearbyViaRpc(double lat, double lng, Map<String, dynamic> currentUserData) async {
     try {
       final response = await Supabase.instance.client.rpc(
         'get_nearby_users',
         params: {'user_lat': lat, 'user_lng': lng, 'radius_meters': 15000},
       );
-      if (mounted)
+      
+      List<dynamic> fetchedUsers = response as List<dynamic>;
+      
+      if (fetchedUsers.isNotEmpty) {
+        try {
+          final userIds = fetchedUsers.map((u) => u['id']).toList();
+          final scoresResponse = await Supabase.instance.client
+              .from('profiles')
+              .select('id, composite_score')
+              .inFilter('id', userIds);
+              
+          final Map<String, dynamic> scoresMap = {
+            for (var item in scoresResponse) item['id'].toString(): item['composite_score']
+          };
+          
+          fetchedUsers = fetchedUsers.map((u) {
+            final mappedUser = Map<String, dynamic>.from(u);
+            mappedUser['composite_score'] = scoresMap[u['id'].toString()];
+            return mappedUser;
+          }).toList();
+        } catch (e) {
+          debugPrint('Error fetching composite scores: $e');
+        }
+      }
+
+      fetchedUsers = MatchmakingService.sortAthletesByKNN(
+        currentUser: currentUserData,
+        athletes: fetchedUsers,
+      );
+
+      if (mounted) {
         setState(() {
-          nearbyUsers = response as List<dynamic>;
+          nearbyUsers = fetchedUsers;
           isLoading = false;
         });
+      }
       _recenterMap();
     } catch (e) {
       debugPrint('RPC error: $e');
-      await _fetchAllAthletes();
+      await _fetchAllAthletes(currentUserData);
     }
   }
 
-  Future<void> _fetchAllAthletes() async {
+  Future<void> _fetchAllAthletes(Map<String, dynamic> currentUserData) async {
     try {
       final data = await Supabase.instance.client
           .from('profiles')
           // explicitly grab only valid columns
-          .select('id, username, preferred_sport, avatar_url')
+          .select('id, username, preferred_sport, avatar_url, skill_level, stamina_level, composite_score, lat, lng')
           .not('username', 'is', null)
           .limit(50);
-      if (mounted)
+          
+      List<dynamic> fetchedUsers = (data as List<dynamic>)
+          .map(
+            (u) => {...u as Map<String, dynamic>, 'distance_meters': null},
+          )
+          .toList();
+
+      fetchedUsers = MatchmakingService.sortAthletesByKNN(
+        currentUser: currentUserData,
+        athletes: fetchedUsers,
+      );
+
+      if (mounted) {
         setState(() {
-          nearbyUsers = (data as List<dynamic>)
-              .map(
-                (u) => {...u as Map<String, dynamic>, 'distance_meters': null},
-              )
-              .toList();
+          nearbyUsers = fetchedUsers;
           isLoading = false;
         });
+      }
       _recenterMap();
     } catch (e) {
       debugPrint('Fetch all athletes error: $e');
@@ -575,9 +631,37 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              username,
-                              style: TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.bold, fontSize: 16, color: _textColor),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    username,
+                                    style: TextStyle(fontFamily: 'Lexend', fontWeight: FontWeight.bold, fontSize: 16, color: _textColor),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (user['composite_score'] != null) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade100,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.star_rounded, color: Colors.amber.shade700, size: 14),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          (user['composite_score'] as num).toStringAsFixed(1),
+                                          style: TextStyle(color: Colors.amber.shade900, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Manrope'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                             const SizedBox(height: 4),
                             Container(
